@@ -309,6 +309,44 @@ ol.fields > li{counter-increment:f;position:relative;padding:12px 0 12px 40px;bo
 ol.fields > li::before{content:counter(f);position:absolute;left:0;top:13px;width:26px;height:26px;border-radius:50%;background:#d9534a;color:#fff;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12.5px;display:flex;align-items:center;justify-content:center}
 ol.fields b{display:block;color:#fff;font-weight:700;margin-bottom:2px}
 #dias{margin-bottom:0}
+/* ---- progresso: seções e itens marcáveis ---- */
+.sec-bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:2px 0 24px;padding:10px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:10px}
+.sec-bar button{font-family:'Montserrat',sans-serif;font-weight:700;font-size:13px;border-radius:999px;cursor:pointer;line-height:1.2;padding:9px 14px;min-height:38px;transition:.15s}
+.sb-done{background:transparent;border:1.5px solid var(--gold2);color:var(--txt);display:inline-flex;align-items:center;gap:8px}
+.sb-done::before{content:'';width:16px;height:16px;border-radius:50%;border:1.5px solid var(--gold2);display:inline-block;flex-shrink:0}
+.sb-done[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:#0b0b0b}
+.sb-done[aria-pressed="true"]::before{content:'✓';border-color:#0b0b0b;color:#0b0b0b;font-size:11px;display:inline-flex;align-items:center;justify-content:center}
+.sb-prog{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--dim);flex:1;min-width:70px}
+.sb-reset{background:transparent;border:1px solid var(--line);color:var(--dim)}
+.sb-reset.arm{border-color:var(--red);color:#fff;background:var(--red)}
+
+.it{position:relative;padding-right:46px!important}
+.itbtn{position:absolute;right:0;top:-2px;width:32px;height:32px;border-radius:50%;border:1.5px solid var(--gold2);background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;color:transparent;font-size:15px;font-weight:800;padding:0;line-height:1;z-index:2}
+.itbtn::after{content:'✓'}
+.itbtn:hover{border-color:var(--gold)}
+.itbtn[aria-pressed="true"]{background:var(--green);border-color:var(--green);color:#0b0b0b}
+.itbtn:focus-visible,.sec-bar button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.it.done{color:var(--dim)}
+.it.done > *:not(.itbtn){opacity:.42}
+li.it.done{text-decoration:line-through;text-decoration-color:rgba(255,255,255,.35)}
+.steps>li.it.done,.tl>li.it.done,ol.fields>li.it.done{text-decoration:none}
+.err.it{padding-right:56px!important}
+.err.it .itbtn{right:12px;top:14px}
+
+section.sec-done .sec-body-dim:not(:has(.it)){opacity:.38}
+section.sec-done .sec-bar{border-color:var(--green)}
+
+/* sumário */
+.toc-prog{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;margin:0 0 6px}
+.toc-prog .bar{flex:1;min-width:140px;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+.toc-prog .fill{height:100%;width:0;background:var(--green);transition:width .3s}
+.toc-prog .lbl{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--dim)}
+.toc-prog button{background:transparent;border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:8px 13px;font-family:inherit;font-size:12px;font-weight:700;cursor:pointer;min-height:36px}
+.toc-prog button.arm{background:var(--red);border-color:var(--red);color:#fff}
+.guidelist a.toc-done{color:var(--dim);text-decoration:line-through}
+.guidelist a.toc-done::after{content:' ✓';color:var(--green);text-decoration:none;display:inline-block;margin-left:4px}
+.daygrid a.toc-done{border-color:var(--green);background:rgba(79,163,109,.10)}
+.daygrid a.toc-done b::after{content:' ✓';color:var(--green)}
 </style>
 </head>
 <body>
@@ -1464,6 +1502,116 @@ ol.fields b{display:block;color:#fff;font-weight:700;margin-bottom:2px}
   window.addEventListener('scroll',vis,{passive:true}); vis();
 })();
 </script>
+<script>
+(function(){
+  var KEY='manual-istambul-progress-v1', st={};
+  try{ st=JSON.parse(localStorage.getItem(KEY)||'{}'); }catch(e){ st={}; }
+  function save(){ try{ localStorage.setItem(KEY,JSON.stringify(st)); }catch(e){} }
+  var OLDKEY='manual-istambul-v3';
+  function saveOld(id,v){ try{ var o=JSON.parse(localStorage.getItem(OLDKEY)||'{}'); o[id]=v; localStorage.setItem(OLDKEY,JSON.stringify(o)); }catch(e){} }
+
+  var CAND='.steps > li, .tl > li, ol.fields > li, .err, ul > li, ol > li';
+  var SKIP='nav, .toc, .guidelist, .daygrid, .check, .legend2, footer, .sec-bar, .toc-prog';
+  var sections=[].slice.call(document.querySelectorAll('section.block[id], section.day[id]'));
+
+  function armButton(btn, label, action){
+    var t;
+    btn.addEventListener('click',function(){
+      if(btn.classList.contains('arm')){ clearTimeout(t); btn.classList.remove('arm'); btn.textContent=label; action(); return; }
+      btn.classList.add('arm'); btn.textContent='Toque de novo para confirmar';
+      t=setTimeout(function(){ btn.classList.remove('arm'); btn.textContent=label; },3500);
+    });
+  }
+
+  var model=[];
+  sections.forEach(function(sec){
+    var sid=sec.id;
+    // itens marcáveis
+    var raw=[].slice.call(sec.querySelectorAll(CAND)).filter(function(el){ return !el.closest(SKIP); });
+    var items=raw.filter(function(el){
+      var p=el.parentElement && el.parentElement.closest(CAND);
+      return !(p && raw.indexOf(p)>-1);
+    });
+    var its=items.map(function(el,i){
+      var key='it:'+sid+':'+i;
+      el.classList.add('it');
+      var b=document.createElement('button'); b.type='button'; b.className='itbtn';
+      b.setAttribute('aria-label','Marcar como feito');
+      el.insertBefore(b, el.firstChild);
+      b.addEventListener('click',function(e){ e.preventDefault(); e.stopPropagation(); st[key]=!st[key]; if(!st[key]) delete st[key]; delete st['sec:'+sid]; save(); paint(); });
+      return {el:el,btn:b,key:key};
+    });
+    var inputs=[].slice.call(sec.querySelectorAll('.check input[type=checkbox], .leg input[type=checkbox]'));
+
+    // barra da seção
+    var bar=document.createElement('div'); bar.className='sec-bar';
+    bar.innerHTML='<button type="button" class="sb-done" aria-pressed="false">Marcar seção como feita</button><span class="sb-prog"></span><button type="button" class="sb-reset">Resetar seção</button>';
+    var anchor=sec.querySelector('.dayhead, .trip') || sec.querySelector('h2');
+    anchor.parentNode.insertBefore(bar, anchor.nextSibling);
+    // o que escurece quando a seção está feita
+    [].slice.call(sec.children).forEach(function(ch){
+      if(ch===bar || ch.matches('.secnum, h2, .dayhead, .trip')) return;
+      ch.classList.add('sec-body-dim');
+    });
+
+    var m={sec:sec,sid:sid,its:its,inputs:inputs,bar:bar,doneBtn:bar.querySelector('.sb-done'),prog:bar.querySelector('.sb-prog')};
+    model.push(m);
+
+    m.doneBtn.addEventListener('click',function(){
+      var nowDone=!isDone(m);
+      setAll(m,nowDone);
+    });
+    var rb=bar.querySelector('.sb-reset');
+    armButton(rb,'Resetar seção',function(){ setAll(m,false); });
+
+    inputs.forEach(function(inp){ inp.addEventListener('change',function(){ delete st['sec:'+sid]; save(); setTimeout(paint,0); }); });
+  });
+
+  function setAll(m,val){
+    m.its.forEach(function(it){ if(val) st[it.key]=true; else delete st[it.key]; });
+    m.inputs.forEach(function(inp){
+      if(inp.checked!==val){ inp.checked=val; saveOld(inp.id,val); inp.dispatchEvent(new Event('change',{bubbles:true})); }
+    });
+    if(val) st['sec:'+m.sid]=true; else delete st['sec:'+m.sid];
+    save(); setTimeout(paint,0);
+  }
+  function counts(m){
+    var total=m.its.length+m.inputs.length, done=0;
+    m.its.forEach(function(it){ if(st[it.key]) done++; });
+    m.inputs.forEach(function(inp){ if(inp.checked) done++; });
+    return {total:total,done:done};
+  }
+  function isDone(m){
+    var c=counts(m);
+    return c.total>0 ? c.done===c.total : !!st['sec:'+m.sid];
+  }
+
+  // sumário
+  var toc=document.getElementById('sumario');
+  var tp=document.createElement('div'); tp.className='toc-prog';
+  tp.innerHTML='<div class="bar"><div class="fill"></div></div><span class="lbl"></span><button type="button">Zerar tudo</button>';
+  var lead=toc.querySelector('.lead'); lead.parentNode.insertBefore(tp, lead.nextSibling);
+  armButton(tp.querySelector('button'),'Zerar tudo',function(){ model.forEach(function(m){ setAll(m,false); }); });
+
+  function paint(){
+    var T=0,D=0,secDone=0;
+    model.forEach(function(m){
+      m.its.forEach(function(it){ var on=!!st[it.key]; it.el.classList.toggle('done',on); it.btn.setAttribute('aria-pressed',on?'true':'false'); });
+      var c=counts(m), done=isDone(m);
+      T+=c.total; D+=c.done; if(done) secDone++;
+      m.sec.classList.toggle('sec-done',done);
+      m.doneBtn.setAttribute('aria-pressed',done?'true':'false');
+      m.doneBtn.textContent=done?'Seção feita':'Marcar seção como feita';
+      m.prog.textContent=c.total? (c.done+'/'+c.total+' itens') : '';
+      [].slice.call(toc.querySelectorAll('a[href="#'+m.sid+'"]')).forEach(function(a){ a.classList.toggle('toc-done',done); });
+    });
+    tp.querySelector('.fill').style.width=(model.length? secDone/model.length*100:0)+'%';
+    tp.querySelector('.lbl').textContent=secDone+' de '+model.length+' seções feitas';
+  }
+  paint();
+})();
+</script>
+
 <script>
 (function(){
   var badge=document.getElementById('netbadge'), t;
