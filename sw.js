@@ -1,5 +1,5 @@
 // Manual de Bordo — Istambul · service worker
-const CACHE = 'manual-istambul-7137bc60';
+const CACHE = 'manual-istambul-v4-20261013';
 const ASSETS = [
   "./",
   "index.html",
